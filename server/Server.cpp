@@ -122,7 +122,9 @@ void Server::acceptConnections(){
 
                 close(client_fd);
             }
-
+            else{
+                std::cout << "no such socket linked to this fd: " << sock_fd << std::endl;
+            }
         }
     }
 }
