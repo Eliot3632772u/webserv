@@ -2,7 +2,7 @@
 
 Server::Server(std::vector<ServerConfig> & servers) : servers(servers){}
 
-struct addrinfo * initSockerData(const char * host, const char * port){
+struct addrinfo * initSocketData(const char * host, const char * port){
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
@@ -41,7 +41,7 @@ void Server::initSockets(){
         if (servers[i].isVirtualServer)
             continue;
         
-        res = initSockerData(servers[i].host.c_str(), servers[i].port.c_str());
+        res = initSocketData(servers[i].host.c_str(), servers[i].port.c_str());
         if(res == NULL)
             initSocketsError(NULL, this->SocketFds, NULL);
         
@@ -60,7 +60,7 @@ void Server::initSockets(){
             initSocketsError("stesocketopt: ", this->SocketFds, res);
         
 
-        if (bind(socket_fd, res->ai_addr, res->ai_addrlen) == 0)
+        if (bind(socket_fd, res->ai_addr, res->ai_addrlen) < 0)
             initSocketsError("bind: ", this->SocketFds, res);
 
 
@@ -82,7 +82,7 @@ void Server::watchReadySockets(){
         int listen_fd = SocketFds[i];
 
         struct epoll_event event;
-        event.events = EPOLLIN | EPOLLET;
+        event.events = EPOLLIN | EPOLLOUT | EPOLLET;
         event.data.fd = listen_fd;
 
         if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, listen_fd, &event) == -1) {
@@ -96,35 +96,72 @@ void Server::watchReadySockets(){
 void Server::acceptConnections(){
 
     struct epoll_event events[100];
+    std::vector<int> client_fds;
+
     while (true){
-
+        
         int ready_fds = epoll_wait(this->epollFd, events, 100, -1);
+        std::cout << "waiting :" << std::endl;
         if (ready_fds < 0){
-
+            
             close(this->epollFd);
             initSocketsError("epoll_event: ", this->SocketFds, NULL);
         }
 
-        for (int i = 0; i < ready_fds; i++){
+        for(int i = 0; i < ready_fds; i++){
 
-            int sock_fd = events[i].data.fd;
-            if (std::find(this->SocketFds.begin(), this->SocketFds.end(), sock_fd) != this->SocketFds.end()){
+            int fd = events[i].data.fd;
+            if (std::find(this->SocketFds.begin(), this->SocketFds.end(), fd) != this->SocketFds.end()){
 
-                int client_fd = accept(sock_fd, NULL, NULL);
+                int client_fd = accept(fd, NULL, NULL);
                 if (client_fd < 0){
 
                     close(this->epollFd);
                     initSocketsError("accept: ", this->SocketFds, NULL);
                 }
 
-                // parse request
-                // send response
+                fcntl(client_fd, F_SETFL, O_NONBLOCK);
 
-                close(client_fd);
+                struct epoll_event event;
+                event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+                event.data.fd = client_fd;
+
+                if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
+                    
+                    close(this->epollFd);
+                    close(client_fd);
+                    initSocketsError(NULL, client_fds, NULL);
+                    initSocketsError("epoll_ctl", this->SocketFds, NULL);
+                }
+
+                client_fds.push_back(client_fd);
+                    continue;
+            }
+            else if(std::find(client_fds.begin(), client_fds.end(), fd) != client_fds.end()) {
+
+                char BUF[1024];
+                std::cout << "block start" << std::endl;
+
+                read(fd, BUF, 100);
+                std::cout << "block end" << std::endl;
+                std::cout << BUF << std::endl;
+
+                char * res = "HTTP/1.1 200 OK\r\n\r\n<h1>HELLO</h1>\r\n";
+                write(fd, res, strlen(res));
+                // if (epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL) < 0){
+                //     perror("epoll_ctl: ");
+                //     exit(1);
+                // }                   ONLY DELETE CONNECTION WHEN CONNECTION HEADER SET TO CLOSE AND AFTER READER ALL DATA
+                // close(fd);
+                // client_fds.erase(std::find(client_fds.begin(), client_fds.end(), fd));
             }
             else{
-                std::cout << "no such socket linked to this fd: " << sock_fd << std::endl;
-            }
+                std::cout << "no such socket linked to this fd: " << fd << std::endl;
+            }        
+                // // parse request
+                // // send response
+    
+                // close(client_fd);
         }
     }
 }

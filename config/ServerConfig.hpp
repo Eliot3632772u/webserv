@@ -2,6 +2,8 @@
 
 #include "../inc/webserv.hpp"
 
+struct LocationConfig;
+
 struct ServerConfig {
 
     bool isVirtualServer; // is the server host and port are not duplicates 
