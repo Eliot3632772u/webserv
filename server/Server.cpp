@@ -38,7 +38,7 @@ void Server::initSockets(){
 
     for(int i = 0; i < servers.size(); i++){
 
-        if (servers[i].isVirtualServer)
+        if (servers[i].isVirtual)
             continue;
         
         res = initSocketData(servers[i].host.c_str(), servers[i].port.c_str());

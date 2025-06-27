@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../inc/webserv.hpp"
+#include "../config/ServerConfig.hpp"
 
 struct Server {
 

@@ -1,11 +1,11 @@
-#pragma once 
+#pragma once
 
 #include "../inc/webserv.hpp"
+#include "ServerConfig.hpp"
 
-struct ConfigFile{
-
-    std::vector<ServerConfig> servers;
-
-    void loadConfigFile(std::string filePath);
-    ServerConfig & getServerByServerName(std::string serverName);
+class ConfigFile
+{
+	public:
+		std::vector<ServerConfig> servers;
+		ServerConfig& getServerByServerName(std::string serverName);
 };
