@@ -1,0 +1,23 @@
+
+<HTTP/1.1>
+
+-- HTTP/1.1 defines the sequence CR LF as the end-of-line marker for all
+   protocol elements except the entity-body
+
+-- the content-type header decides how the body lines should be ended
+
+-- check the parsing for each header, each header field can have  values that in other headers are invalid
+   search for this in the rfc:  Many HTTP/1.1 header field values consist of words separated by LWS
+   or special characters. These special characters MUST be in a quoted
+   string to be used within a parameter value (as defined in section
+   3.6).
+
+-- URI should be less or equal to 255 bytes of lenght else  return 414 (Request-URI Too Long) status
+
+-- URI only supports a set of characters look it up
+
+-- handle hex incoding "%2d" in URI 
+
+-- content-type header values are case-insensitive, parameters are;
+
+-- ignore leading /r/n in Request

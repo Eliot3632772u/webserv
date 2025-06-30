@@ -5,11 +5,13 @@ INCS = config/ConfigParser.hpp \
 		config/ConfigFile.hpp \
 		config/LocationConfig.hpp \
 		config/ServerConfig.hpp \
-		server/Server.hpp
+		server/Server.hpp \
+		# httpRequest/httpRequest.hpp
 SRCS = main.cpp \
 		config/ConfigParser.cpp \
 		config/ConfigFile.cpp \
-		server/Server.cpp
+		server/Server.cpp \
+		# httpRequest/httpRequest.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 all: $(NAME)

@@ -32,7 +32,7 @@ int main(int ac, char **av)
 
     // config.servers.push_back(serverconf);
 
-    Server server(config.servers);
+    Server server(config);
 
     server.initSockets();
     server.watchReadySockets();

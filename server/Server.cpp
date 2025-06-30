@@ -1,6 +1,7 @@
 #include "../inc/webserv.hpp"
+#include "../server/Server.hpp"
 
-Server::Server(std::vector<ServerConfig> & servers) : servers(servers){}
+Server::Server(ConfigFile & config) : serverConfig(config)/*, httpRequest(config)*/{}
 
 struct addrinfo * initSocketData(const char * host, const char * port){
 
@@ -19,7 +20,7 @@ struct addrinfo * initSocketData(const char * host, const char * port){
     return res;
 }
 
-void initSocketsError(const char * err, std::vector<int>socketFds, struct addrinfo * addrinfo){
+void initSocketsError(const char * err, std::vector<std::pair<int, std::pair<std::string, std::string> > > socketFds, struct addrinfo * addrinfo){
 
     if (addrinfo)
         freeaddrinfo(addrinfo);
@@ -27,7 +28,7 @@ void initSocketsError(const char * err, std::vector<int>socketFds, struct addrin
     if (err)
         perror(err);
 
-    for(int i = 0; i < socketFds.size(); i++) close(socketFds[i]);
+    for(int i = 0; i < socketFds.size(); i++) close(socketFds[i].first);
 
     exit(1);
 }
@@ -36,12 +37,12 @@ void Server::initSockets(){
 
     struct addrinfo *res;
 
-    for(int i = 0; i < servers.size(); i++){
+    for(int i = 0; i < serverConfig.servers.size(); i++){
 
-        if (servers[i].isVirtual)
+        if (serverConfig.servers[i].isVirtual)
             continue;
         
-        res = initSocketData(servers[i].host.c_str(), servers[i].port.c_str());
+        res = initSocketData(serverConfig.servers[i].host.c_str(), serverConfig.servers[i].port.c_str());
         if(res == NULL)
             initSocketsError(NULL, this->SocketFds, NULL);
         
@@ -50,7 +51,7 @@ void Server::initSockets(){
         if (socket_fd == -1)
             initSocketsError("socket: ", this->SocketFds, res);
 
-        this->SocketFds.push_back(socket_fd);
+        this->SocketFds.push_back(std::make_pair(socket_fd, std::make_pair(serverConfig.servers[i].host, serverConfig.servers[i].port)));
 
         if (fcntl(socket_fd, F_SETFL, O_NONBLOCK) < 0)
             initSocketsError("fcntl: ", this->SocketFds, res);
@@ -79,7 +80,7 @@ void Server::watchReadySockets(){
 
     for (size_t i = 0; i < SocketFds.size(); ++i) {
 
-        int listen_fd = SocketFds[i];
+        int listen_fd = SocketFds[i].first;
 
         struct epoll_event event;
         event.events = EPOLLIN | EPOLLOUT | EPOLLET;
@@ -92,11 +93,32 @@ void Server::watchReadySockets(){
         }
     }
 }
+std::pair<std::string, std::string> getSockInfo(int SocketFd, std::vector<std::pair<int, std::pair<std::string, std::string> > > & vectorinfo){
+
+    for(int i = 0; i < vectorinfo.size(); i++){
+
+        if (SocketFd == vectorinfo[i].first)
+            return vectorinfo[i].second;
+    }
+
+    return vectorinfo[0].second;
+}
+
+bool is_match(int & fd, std::vector<std::pair<int, std::pair<std::string, std::string> > > & fds){
+
+    for(int i = 0; i < fds.size(); i++){
+
+        if (fds[i].first == fd)
+            return true;
+    }
+    return false;
+}
+
 
 void Server::acceptConnections(){
 
     struct epoll_event events[100];
-    std::vector<int> client_fds;
+    // std::vector<std::pair<int, std::pair<std::string, std::string> > > client_fds;
 
     while (true){
         
@@ -111,7 +133,8 @@ void Server::acceptConnections(){
         for(int i = 0; i < ready_fds; i++){
 
             int fd = events[i].data.fd;
-            if (std::find(this->SocketFds.begin(), this->SocketFds.end(), fd) != this->SocketFds.end()){
+
+            if (is_match(fd, SocketFds)){
 
                 int client_fd = accept(fd, NULL, NULL);
                 if (client_fd < 0){
@@ -130,36 +153,31 @@ void Server::acceptConnections(){
                     
                     close(this->epollFd);
                     close(client_fd);
-                    initSocketsError(NULL, client_fds, NULL);
+                    initSocketsError(NULL, this->client_fds, NULL);
                     initSocketsError("epoll_ctl", this->SocketFds, NULL);
                 }
 
-                client_fds.push_back(client_fd);
-                    continue;
+                this->client_fds.push_back(std::make_pair(client_fd, getSockInfo(fd, this->SocketFds)));
+                
+                client_requests[client_fd].client_fd = client_fd;
+                client_requests[client_fd].host = getSockInfo(fd, this->SocketFds).first;
+                client_requests[client_fd].port = getSockInfo(fd, this->SocketFds).second;
+                continue;
             }
-            else if(std::find(client_fds.begin(), client_fds.end(), fd) != client_fds.end()) {
+            if (is_match(fd, this->client_fds)){
+                // httpRequest.readRequest(fd);
+                try{
 
-                char BUF[1024];
-                std::cout << "block start" << std::endl;
+                    client_requests[fd].readRequest();
+                }catch (int e){
 
-                read(fd, BUF, 100);
-                std::cout << "block end" << std::endl;
-                std::cout << BUF << std::endl;
+                    // handle response
+                }
 
-                char * res = "HTTP/1.1 200 OK\r\n\r\n<h1>HELLO</h1>\r\n";
-                write(fd, res, strlen(res));
-                // if (epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL) < 0){
-                //     perror("epoll_ctl: ");
-                //     exit(1);
-                // }                   ONLY DELETE CONNECTION WHEN CONNECTION HEADER SET TO CLOSE AND AFTER READER ALL DATA
-                // close(fd);
-                // client_fds.erase(std::find(client_fds.begin(), client_fds.end(), fd));
             }
             else{
                 std::cout << "no such socket linked to this fd: " << fd << std::endl;
             }        
-                // // parse request
-                // // send response
     
                 // close(client_fd);
         }
